@@ -89,7 +89,10 @@ and run:
 python train_classifier.py ../data/DisasterResponse.db disaster_messages classifier.pkl
 ```
 This step takes about 1 hour and 40 minutes, because of the optimizing of the parameters with grid search.
-If you just want to try the Flask Web App than feel free to use the given model: models/classifier.pkl
+If you just want to try the Flask Web App than feel free to use the pretrained model.
+
+To download the pretrained classifier from this release assets page https://github.com/Ivana-DS/Disaster-Response-Pipeline/releases/tag/pretrained_classifier and put it in the following location:
+`models/classifier.pkl`
 
 **3. Flask Web App**
 To run the Fask Web App and classify messages go to the app repository:
