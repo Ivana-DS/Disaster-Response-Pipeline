@@ -1,13 +1,17 @@
-import json
-import plotly
-import pandas as pd
-import sklearn.externals
-import joblib
+import sys
 
+# add parent dir to python path so models and data modules are accessible by run.py script
+sys.path.append('../')
+
+import json
+import joblib
+import pandas as pd
+import plotly
 from flask import Flask
-from flask import render_template, request, jsonify
+from flask import render_template, request
 from plotly.graph_objs import Bar
 from sqlalchemy import create_engine
+from models.train_classifier import tokenize
 
 app = Flask(__name__)
 
@@ -19,20 +23,27 @@ df = pd.read_sql_table('disaster_messages', engine)
 model = joblib.load("../models/classifier.pkl")
 
 
-# index webpage displays cool visuals and receives user input text for model
+
 @app.route('/')
 @app.route('/index')
 def index():
+    """
+    extracts data needed for the visualisations,
+    displays data visuals and receives user input text for model
+    """
 
-    # extract data needed for visuals
+    # extract genres and get the number of messages per genre
     genre_counts = df.groupby('genre').count()['message']
     genre_names = list(genre_counts.index)
 
+    # extract categories and get the number of messages per categorie
     categories = df.columns[4:].tolist()
     messages_per_category = df[categories].sum()
 
-    df['original_english']= df['message']==df['original']
+    # get the number of messages being posted in english
+    df['original_english'] = df['message'] == df['original']
     english_message = df['original_english'].value_counts()
+    labels = df['original_english'].unique()
 
     # create visuals
     graphs = [
@@ -75,7 +86,7 @@ def index():
         {
             'data': [
                 Bar(
-                    x=df['original_english'].unique(),
+                    x=labels,
                     y=english_message
                 )
             ],
@@ -100,9 +111,12 @@ def index():
     return render_template('master.html', ids=ids, graphJSON=graphJSON)
 
 
-# web page that handles user query and displays model results
 @app.route('/go')
 def go():
+    """
+    handles user query and displays model results
+    """
+
     # save user input in query
     query = request.args.get('query', '')
 
@@ -119,6 +133,9 @@ def go():
 
 
 def main():
+    """
+    runs the app
+    """
     app.run(host='0.0.0.0', port=3000, debug=True)
 
 

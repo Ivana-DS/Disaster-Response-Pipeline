@@ -1,14 +1,14 @@
 # import packages
 import sys
+import pickle
+import logging
 
 # import libraries
 import nltk
-nltk.download(['words','punkt', 'wordnet'])
+nltk.download(['words', 'punkt', 'wordnet'])
 
 import pandas as pd
 
-import pickle
-import logging
 from sqlalchemy import create_engine
 
 from nltk.tokenize import word_tokenize
@@ -28,11 +28,9 @@ logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=lo
 
 def tokenize(text):
     """
-    Turns the input text into a list of lemmatized tokens.
+    Turns the input text into a list of lowercase, lemmatized tokens
 
-    Resulting tokens are lowercase with leading/trailing whitespace removed.
-
-    :param text: Text to be tokenized
+    :param text: text to be tokenized
     :return: list of lemmatized tokens
     """
 
@@ -42,100 +40,106 @@ def tokenize(text):
     # initiate lemmatizer
     lemmatizer = WordNetLemmatizer()
 
-    # iterate through each token
     clean_tokens = []
-    for tok in tokens:
 
+    # iterate through each token
+    for token in tokens:
         # lemmatize, normalize case, and remove leading/trailing white space
-        clean_tok = lemmatizer.lemmatize(tok.lower().strip())
-        clean_tokens.append(clean_tok)
+        clean_token= lemmatizer.lemmatize(token.lower().strip())
+        clean_tokens.append(clean_token)
 
     return clean_tokens
 
 
 def load_data(database_fp, database_table):
     """
-    Loads table from sqlite database
-    :param database_fp: filepath for the database
-    :param database_table: table from the database
-    :return: X- dataframe including train/test data, y-dataframe including prediction data
+    Loads table from sqlite database into dataframe.
+
+    :param database_fp: filepath of the sqlite database
+    :param database_table: database table name
+    :return: a tuple (X, Y) X: dataframe containing messages, Y: dataframe containing categories
     """
     logging.info('Loading data from {} , table: {} .format(database_fp, database_table)')
     engine = create_engine('sqlite:///{}'.format(database_fp))
     df = pd.read_sql("SELECT * FROM {}".format(database_table), engine)
     X = df.message
+
+    # categories start from column 5 on
     categories = df.columns[4:].tolist()
-    y = df[categories]
-    return X, y
+    Y = df[categories]
+    return X, Y
 
 
-def build_model():
+def build_model_pipeline():
     """
-    build model pipline with GridSearch
+    Build model pipeline.
 
-    :return: Model pipline
+    :return: model pipeline
     """
-    # text processing and model pipeline
-
     logging.info('Building model pipline')
-
     pipeline = Pipeline([
         ('vect', CountVectorizer(tokenizer=tokenize)),
         ('tfidf', TfidfTransformer()),
         ('clf', MultiOutputClassifier(RandomForestClassifier()))
     ])
 
-    # define parameters for GridSearchCV
+    return pipeline
+
+
+def create_grid_search(pipeline):
+    """
+    Create GridSearchCV object with predefined parameters.
+    :param pipeline: the model pipeline to perform the search for
+    :return: the grid search object
+    """
     parameters = {
-        'clf__estimator__n_estimators' : [10, 20, 30, 50, 100],
+        'clf__estimator__n_estimators': [10, 20, 30, 50, 100],
         'clf__estimator__min_samples_split': [2, 3, 4]
     }
 
-    # create gridsearch object
-    model_pipeline = GridSearchCV(pipeline, param_grid=parameters)
-
-    return model_pipeline
+    return GridSearchCV(pipeline, param_grid=parameters)
 
 
-def train_and_evaluate(X, y, model):
+def train_model(X_train, y_train, grid_search):
     """
-    splits data into train and test, trains the model pipeline and evaluates the model on the test data
+    Trains a model using the supplied train data.
 
-    :param X: Dataframe with data for the model
-    :param y: Dataframe including predictions
-    :param model: model pipline
+    :param X_train: the X train data
+    :param y_train: the y train data
+    :param grid_search: a GridSearchCV object configured with a model pipeline and search parameters
     :return:
     """
-    # train test split
     logging.info('Model training started')
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y)
-
-    # fit model
-    model.fit(X_train, y_train)
-
+    model = grid_search.fit(X_train, y_train)
     logging.info('Model has been trained')
+    return model
 
+
+def evaluate_model(X_test, y_test, model):
+    """
+    Evaluates model predictions using test data and prints the classification report.
+
+    :param X_test: the X test data
+    :param y_test: the y test data
+    :param model: the model
+    """
     logging.info('Evaluating model')
     # predictions on test data set
     y_pred = model.predict(X_test)
-    y_pred = pd.DataFrame(y_pred, columns = y_test.columns)
-
+    y_pred = pd.DataFrame(y_pred, columns=y_test.columns)
     # output model test results
     logging.info('Test data performance:')
     for column in y_test.columns:
-        report = classification_report(y_test[column], y_pred[column])
+        report = classification_report(y_test[column], y_pred[column], zero_division=0)
         logging.info('Category: {}\n{}'.format(column, report))
-
-    return model
 
 
 def export_model(model, model_filepath):
     """
-    saves the model in a pickle file
+    Saves the model in a pickle file.
 
     :param model: trained model
-    :param model_filepath: filipath where the model should be saved
+    :param model_filepath: filepath where the model should be saved
     """
     logging.info('Saving model to {}'.format(model_filepath))
     pickle.dump(model, open(model_filepath, 'wb'))
@@ -151,19 +155,23 @@ def run_pipeline(database_fp, database_table, model_filepath):
     :param model_filepath: Filepath where the trained model should be saved
     :return:
     """
-
-    X, y = load_data(database_fp,database_table )  # run ETL pipeline
-    model = build_model()  # build model pipeline
-    model = train_and_evaluate(X, y, model)  # train model pipeline
-    export_model(model, model_filepath)  # save model
+    X, y = load_data(database_fp, database_table)              # load data from database
+    model_pipeline = build_model_pipeline()                    # build model pipeline
+    grid_search = create_grid_search(model_pipeline)           # create grid search to optimize parameter
+    X_train, X_test, y_train, y_test = train_test_split(X, y)  # Split input data in to training and test set
+    model = train_model(X_train, y_train, grid_search)         # train model pipeline
+    evaluate_model(X_test, y_test, model)                      # print model evaluation report
+    export_model(model, model_filepath)                        # save model
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 4:
-        database_fp = sys.argv[1]  # get filename of dataset
-        database_table = sys.argv[2]
-        model_fp = sys.argv[3]
+        database_fp = sys.argv[1]  # get filename of database
+        database_table = sys.argv[2]  # get table name
+        model_fp = sys.argv[3]  # get filepath for saving the trained model
         run_pipeline(database_fp, database_table, model_fp)  # run data pipeline
     else:
-        logging.info('To run this program you need 3 Arguments: \ n Database filepath, table name and model filepath \n'
-                     'Please add them to your command line. \n')
+        logging.info('To run this program you need 3 additional arguments: \n '
+                     'database filepath, table name and model filepath \n'
+                     'Please add them to your command line.'
+                     'Example: python train_classifier.py ../data/DisasterResponse.db disaster_messages classifier.pkl')
