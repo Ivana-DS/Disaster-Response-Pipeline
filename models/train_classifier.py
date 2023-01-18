@@ -115,24 +115,30 @@ def train_model(X_train, y_train, grid_search):
     return model
 
 
-def evaluate_model(X_test, y_test, model):
+def evaluate_model(X_test, y_test, model, evaluation_report_fp):
     """
-    Evaluates model predictions using test data and prints the classification report.
+    Evaluates model predictions using test data prints the classification reports on each category
+    and saves them into a file
 
     :param X_test: the X test data
     :param y_test: the y test data
     :param model: the model
+    :param evaluation_report_fp: filepath for saving the evaluation report
     """
     logging.info('Evaluating model')
     # predictions on test data set
     y_pred = model.predict(X_test)
     y_pred = pd.DataFrame(y_pred, columns=y_test.columns)
-    # output model test results
+
+
+    # output and save classification reports per category
     logging.info('Test data performance:')
+    report_file = open(evaluation_report_fp, 'w')
     for column in y_test.columns:
         report = classification_report(y_test[column], y_pred[column], zero_division=0)
         logging.info('Category: {}\n{}'.format(column, report))
-
+        report_file.write('Category: {}\n{}'.format(column, report))
+    report_file.close()
 
 def export_model(model, model_filepath):
     """
@@ -155,12 +161,15 @@ def run_pipeline(database_fp, database_table, model_filepath):
     :param model_filepath: Filepath where the trained model should be saved
     :return:
     """
+
     X, y = load_data(database_fp, database_table)              # load data from database
     model_pipeline = build_model_pipeline()                    # build model pipeline
     grid_search = create_grid_search(model_pipeline)           # create grid search to optimize parameter
     X_train, X_test, y_train, y_test = train_test_split(X, y)  # Split input data in to training and test set
     model = train_model(X_train, y_train, grid_search)         # train model pipeline
-    evaluate_model(X_test, y_test, model)                      # print model evaluation report
+
+    evaluation_report_fp = "evaluation_report.txt"
+    evaluate_model(X_test, y_test, model, evaluation_report_fp)   # print and save model evaluation reports
     export_model(model, model_filepath)                        # save model
 
 
