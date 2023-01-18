@@ -55,6 +55,7 @@ pip install -r requirements.txt
 - models
 |- train_classifier.py # ML Pipline
 |- classifier.pkl  # saved model 
+|-evaluation_report.txt
 
 - readme_images 
 |- classification_example.png
@@ -91,7 +92,10 @@ python train_classifier.py ../data/DisasterResponse.db disaster_messages classif
 This step takes about 1 hour and 40 minutes, because of the optimizing of the parameters with grid search.
 If you just want to try the Flask Web App than feel free to use the pretrained model.
 
-To download the pretrained classifier from this release assets page https://github.com/Ivana-DS/Disaster-Response-Pipeline/releases/tag/pretrained_classifier and put it in the following location:
+To download the pretrained classifier from this release assets page 
+https://github.com/Ivana-DS/Disaster-Response-Pipeline/releases/tag/pretrained_classifier
+and put it in the following location:
+
 `models/classifier.pkl`
 
 **3. Flask Web App**
@@ -107,3 +111,7 @@ python run.py
 ```
 and then open http://127.0.0.1:3000 in your browser
 
+## Evaluation
+
+If you are interested in the model performance I got on the test data, you can see it in `models/evaluation_report`
+The file contains the classification reports from all categories.
